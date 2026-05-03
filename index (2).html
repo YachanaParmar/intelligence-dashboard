@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FUSION.AI — Strategic Intelligence Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080a0e;--surface:#0f1218;--surface2:#161b22;--border:#1e2733;
+  --osint:#00d4ff;--humint:#00e676;--imint:#ff6b35;--pred:#c084fc;
+  --text:#dce8f0;--muted:#4a5a6a;--danger:#ff1744;--yellow:#ffd600;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;font-size:13px}
+.app{display:grid;grid-template-rows:48px 1fr 36px;height:100vh}
+
+/* HEADER */
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:16px;font-weight:700;letter-spacing:2px;color:var(--osint)}
+.header-pills{display:flex;gap:8px;align-items:center}
+.pill{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;border:1px solid}
+.pill-osint{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:var(--osint)}
+.pill-humint{background:rgba(0,230,118,0.1);border-color:rgba(0,230,118,0.3);color:var(--humint)}
+.pill-imint{background:rgba(255,107,53,0.1);border-color:rgba(255,107,53,0.3);color:var(--imint)}
+.pulse{width:6px;height:6px;border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(0.7)}}
+.header-right{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);display:flex;gap:16px;align-items:center}
+
+/* MAIN */
+.main{display:grid;grid-template-columns:260px 1fr 250px;gap:1px;background:var(--border);overflow:hidden}
+
+/* PANELS */
+.left-panel,.right-panel{background:var(--surface);padding:10px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.panel-title{font-size:9px;font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+
+/* METRIC CARDS */
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.metric-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1.1}
+.metric-label{font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:.5px}
+.m-osint{border-color:rgba(0,212,255,0.3);background:rgba(0,212,255,0.04)}
+.m-humint{border-color:rgba(0,230,118,0.3);background:rgba(0,230,118,0.04)}
+.m-imint{border-color:rgba(255,107,53,0.3);background:rgba(255,107,53,0.04)}
+.m-total{border-color:rgba(192,132,252,0.3);background:rgba(192,132,252,0.04)}
+
+/* DRAG & DROP */
+.drop-zone{border:1px dashed var(--border);border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--osint);background:rgba(0,212,255,0.04)}
+.drop-icon{font-size:20px;margin-bottom:4px}
+.drop-text{font-size:10px;color:var(--muted);line-height:1.5}
+.drop-text span{color:var(--osint)}
+.drop-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer}
+
+/* SOURCE BUTTONS */
+.source-btns{display:flex;flex-direction:column;gap:5px}
+.src-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .2s;text-align:left}
+.src-btn:hover{border-color:var(--osint)}
+.src-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-weight:700}
+.src-title{font-size:11px;font-weight:600}
+.src-sub{font-size:9px;color:var(--muted);margin-top:1px}
+.src-count{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--border);padding:2px 6px;border-radius:10px}
+
+/* INTEL LIST */
+.intel-list{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto}
+.intel-item{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;cursor:pointer;transition:all .2s}
+.intel-item:hover{border-color:var(--osint)}
+.intel-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.intel-id{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)}
+.intel-type{font-size:8px;padding:2px 6px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:700}
+.intel-title{font-size:10px;font-weight:600;margin-bottom:2px}
+.intel-meta{font-size:9px;color:var(--muted)}
+
+/* MAP */
+.map-area{position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+.map-top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;z-index:1000;pointer-events:none}
+.map-badge{background:rgba(8,10,14,0.92);border:1px solid var(--border);border-radius:8px;padding:7px 12px;backdrop-filter:blur(4px)}
+.map-badge-title{font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.map-badge-val{font-size:12px;font-weight:600;color:var(--osint);font-family:'JetBrains Mono',monospace;margin-top:2px}
+.legend-box{background:rgba(8,10,14,0.92);border:1px solid var(--border);border-radius:8px;padding:8px 12px;backdrop-filter:blur(4px)}
+.legend-row{display:flex;align-items:center;gap:7px;font-size:10px;margin-bottom:3px}
+.legend-row:last-child{margin-bottom:0}
+.ldot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.map-bottom{position:absolute;bottom:10px;left:10px;display:flex;gap:6px;z-index:1000}
+.map-btn{background:rgba(8,10,14,0.92);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 12px;border-radius:6px;cursor:pointer;pointer-events:all}
+.map-btn:hover,.map-btn.active{border-color:var(--osint);color:var(--osint);background:rgba(0,212,255,0.08)}
+
+/* HOVER POPUP */
+.intel-popup{position:absolute;background:rgba(8,10,14,0.97);border:1px solid var(--osint);border-radius:10px;padding:0;z-index:2000;display:none;width:220px;overflow:hidden;pointer-events:none}
+.popup-img{width:100%;height:110px;object-fit:cover;background:#111}
+.popup-img-placeholder{width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#0a0e14;font-size:28px}
+.popup-body{padding:8px 10px}
+.popup-title{font-size:11px;font-weight:700;margin-bottom:4px}
+.popup-row{display:flex;justify-content:space-between;font-size:9px;margin-bottom:2px;color:var(--muted)}
+.popup-val{color:var(--text);font-family:'JetBrains Mono',monospace}
+.popup-type{font-size:8px;padding:2px 6px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:700;margin-bottom:5px;display:inline-block}
+
+/* RIGHT PANEL */
+.filter-btns{display:flex;gap:4px;flex-wrap:wrap}
+.filter-btn{font-size:9px;padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-family:'JetBrains Mono',monospace;color:var(--muted)}
+.filter-btn.active-osint{border-color:var(--osint);color:var(--osint);background:rgba(0,212,255,0.08)}
+.filter-btn.active-humint{border-color:var(--humint);color:var(--humint);background:rgba(0,230,118,0.08)}
+.filter-btn.active-imint{border-color:var(--imint);color:var(--imint);background:rgba(255,107,53,0.08)}
+.filter-btn.active-all{border-color:var(--pred);color:var(--pred);background:rgba(192,132,252,0.08)}
+
+/* CHART */
+.chart-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px}
+
+/* TIMELINE */
+.timeline{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto}
+.tl-item{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--border)}
+.tl-item:last-child{border-bottom:none}
+.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.tl-text{font-size:10px;line-height:1.4;flex:1}
+.tl-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);white-space:nowrap}
+
+/* THREAT */
+.threat-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px}
+.threat-level{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.threat-val{font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--yellow)}
+.threat-label{font-size:10px;color:var(--muted);line-height:1.4}
+.threat-bars{display:flex;flex-direction:column;gap:4px}
+.threat-bar-row{display:flex;align-items:center;gap:6px;font-size:9px}
+.threat-bar-label{color:var(--muted);width:60px;flex-shrink:0}
+.threat-bar-bg{flex:1;background:var(--border);height:4px;border-radius:2px;overflow:hidden}
+.threat-bar-fill{height:4px;border-radius:2px}
+
+/* BOTTOM BAR */
+.bottom-bar{background:var(--surface);border-top:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+.status-row{display:flex;gap:16px}
+.status-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.sdot{width:6px;height:6px;border-radius:50%}
+
+/* MODAL */
+.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:3000;display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:440px;max-height:80vh;overflow-y:auto}
+.modal-head{background:var(--surface2);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);position:sticky;top:0}
+.modal-title{font-size:13px;font-weight:700}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
+.modal-body{padding:16px;display:flex;flex-direction:column;gap:12px}
+.modal-img-wrap{width:100%;height:180px;background:#0a0e14;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.modal-img-placeholder{font-size:48px}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal-stat{background:var(--surface2);border-radius:6px;padding:8px 10px}
+.modal-stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.modal-stat-label{font-size:9px;color:var(--muted);margin-top:2px}
+.modal-desc{font-size:11px;line-height:1.6;color:var(--muted);background:var(--surface2);border-radius:6px;padding:10px}
+
+/* LEAFLET OVERRIDES */
+.leaflet-container{background:#080a0e !important}
+.leaflet-tile{filter:brightness(0.5) saturate(0.3) hue-rotate(180deg)}
+.leaflet-control-attribution{display:none}
+.leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
+
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<div class="header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="logo">FUSION.AI</div>
+    <div style="width:1px;height:20px;background:var(--border)"></div>
+    <span style="font-size:11px;color:var(--muted)">Strategic Multi-Source Intelligence Dashboard</span>
+  </div>
+  <div class="header-pills">
+    <div class="pill pill-osint"><div class="pulse" style="background:var(--osint)"></div>OSINT LIVE</div>
+    <div class="pill pill-humint"><div class="pulse" style="background:var(--humint)"></div>HUMINT ACTIVE</div>
+    <div class="pill pill-imint"><div class="pulse" style="background:var(--imint)"></div>IMINT ONLINE</div>
+  </div>
+  <div class="header-right">
+    <span id="clockDisplay">00:00:00</span>
+    <span style="color:var(--border)">|</span>
+    <span>CLASSIFICATION: UNCLASSIFIED // DEMO</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+
+    <div>
+      <div class="panel-title">Intelligence Summary</div>
+      <div class="metric-grid">
+        <div class="metric m-osint">
+          <div class="metric-val" style="color:var(--osint)" id="countOSINT">12</div>
+          <div class="metric-label">OSINT NODES</div>
+        </div>
+        <div class="metric m-humint">
+          <div class="metric-val" style="color:var(--humint)" id="countHUMINT">8</div>
+          <div class="metric-label">HUMINT REPORTS</div>
+        </div>
+        <div class="metric m-imint">
+          <div class="metric-val" style="color:var(--imint)" id="countIMINT">6</div>
+          <div class="metric-label">IMINT ASSETS</div>
+        </div>
+        <div class="metric m-total">
+          <div class="metric-val" style="color:var(--pred)" id="countTotal">26</div>
+          <div class="metric-label">TOTAL NODES</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Ingest Data Source</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".csv,.json,.jpg,.jpeg,.png" multiple onchange="handleFiles(this.files)">
+        <div class="drop-icon">⬆</div>
+        <div class="drop-text">Drag & drop <span>CSV / JSON / JPG</span><br>or click to browse</div>
+      </div>
+      <div style="font-size:9px;color:var(--muted);margin-top:4px;text-align:center">Supports: HUMINT reports (CSV/JSON) · IMINT imagery (JPG/PNG)</div>
+    </div>
+
+    <div>
+      <div class="panel-title">Connected Sources</div>
+      <div class="source-btns">
+        <div class="src-btn" onclick="loadSource('osint')">
+          <div class="src-icon" style="background:rgba(0,212,255,0.15);color:var(--osint)">OS</div>
+          <div><div class="src-title">MongoDB / AWS S3</div><div class="src-sub">OSINT cloud ingestion</div></div>
+          <div class="src-count" style="color:var(--osint)" id="s-osint">12</div>
+        </div>
+        <div class="src-btn" onclick="loadSource('humint')">
+          <div class="src-icon" style="background:rgba(0,230,118,0.15);color:var(--humint)">HU</div>
+          <div><div class="src-title">Field Reports</div><div class="src-sub">Manual CSV / JSON upload</div></div>
+          <div class="src-count" style="color:var(--humint)" id="s-humint">8</div>
+        </div>
+        <div class="src-btn" onclick="loadSource('imint')">
+          <div class="src-icon" style="background:rgba(255,107,53,0.15);color:var(--imint)">IM</div>
+          <div><div class="src-title">Satellite Imagery</div><div class="src-sub">JPG / JPEG drag & drop</div></div>
+          <div class="src-count" style="color:var(--imint)" id="s-imint">6</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Recent Intelligence Nodes</div>
+      <div class="intel-list" id="intelList"></div>
+    </div>
+
+  </div>
+
+  <!-- MAP -->
+  <div class="map-area">
+    <div id="map"></div>
+
+    <div class="map-top">
+      <div class="map-badge">
+        <div class="map-badge-title">Common Operating Picture</div>
+        <div class="map-badge-val">Global Terrain · <span id="nodeCountBadge">26</span> Active Nodes</div>
+      </div>
+      <div class="legend-box">
+        <div class="legend-row"><div class="ldot" style="background:var(--osint)"></div>OSINT — Open Source</div>
+        <div class="legend-row"><div class="ldot" style="background:var(--humint)"></div>HUMINT — Human Intel</div>
+        <div class="legend-row"><div class="ldot" style="background:var(--imint)"></div>IMINT — Imagery Intel</div>
+        <div class="legend-row"><div class="ldot" style="background:var(--pred);opacity:.7;outline:1px dashed var(--pred);outline-offset:1px"></div>Fused / Corroborated</div>
+      </div>
+    </div>
+
+    <div class="map-bottom">
+      <button class="map-btn active" onclick="filterMap('all',this)">All Sources</button>
+      <button class="map-btn" onclick="filterMap('osint',this)">OSINT</button>
+      <button class="map-btn" onclick="filterMap('humint',this)">HUMINT</button>
+      <button class="map-btn" onclick="filterMap('imint',this)">IMINT</button>
+      <button class="map-btn" onclick="addRandomNode()">+ Inject Node</button>
+    </div>
+
+    <!-- Hover popup -->
+    <div class="intel-popup" id="intelPopup">
+      <div class="popup-img-placeholder" id="popupImg">🛰</div>
+      <div class="popup-body">
+        <div class="popup-type" id="popupType">OSINT</div>
+        <div class="popup-title" id="popupTitle">Node Title</div>
+        <div class="popup-row"><span>Coordinates</span><span class="popup-val" id="popupCoords">—</span></div>
+        <div class="popup-row"><span>Confidence</span><span class="popup-val" id="popupConf">—</span></div>
+        <div class="popup-row"><span>Timestamp</span><span class="popup-val" id="popupTime">—</span></div>
+        <div class="popup-row"><span>Source</span><span class="popup-val" id="popupSrc">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <div>
+      <div class="panel-title">Filter by Source</div>
+      <div class="filter-btns">
+        <button class="filter-btn active-all" onclick="filterMap('all',this)">All</button>
+        <button class="filter-btn" onclick="filterMap('osint',this)" style="color:var(--osint)">OSINT</button>
+        <button class="filter-btn" onclick="filterMap('humint',this)" style="color:var(--humint)">HUMINT</button>
+        <button class="filter-btn" onclick="filterMap('imint',this)" style="color:var(--imint)">IMINT</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Node Distribution</div>
+      <div class="chart-wrap">
+        <canvas id="distChart" height="110"></canvas>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Threat Assessment</div>
+      <div class="threat-box">
+        <div class="threat-level">
+          <div class="threat-val" id="threatVal">ELEVATED</div>
+          <div class="threat-label">Based on<br>fused intelligence</div>
+        </div>
+        <div class="threat-bars">
+          <div class="threat-bar-row">
+            <span class="threat-bar-label">OSINT Sig.</span>
+            <div class="threat-bar-bg"><div class="threat-bar-fill" style="width:72%;background:var(--osint)"></div></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">72%</span>
+          </div>
+          <div class="threat-bar-row">
+            <span class="threat-bar-label">HUMINT Conf.</span>
+            <div class="threat-bar-bg"><div class="threat-bar-fill" style="width:85%;background:var(--humint)"></div></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">85%</span>
+          </div>
+          <div class="threat-bar-row">
+            <span class="threat-bar-label">IMINT Clarity</span>
+            <div class="threat-bar-bg"><div class="threat-bar-fill" style="width:61%;background:var(--imint)"></div></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">61%</span>
+          </div>
+          <div class="threat-bar-row">
+            <span class="threat-bar-label">Fusion Score</span>
+            <div class="threat-bar-bg"><div class="threat-bar-fill" style="width:78%;background:var(--pred)"></div></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">78%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Intelligence Timeline</div>
+      <div class="timeline" id="timeline">
+        <div class="tl-item"><div class="tl-dot" style="background:var(--imint)"></div><div style="flex:1"><div class="tl-text">IMINT: Satellite pass confirmed — Zone Delta</div><div class="tl-time">08:14</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--osint)"></div><div style="flex:1"><div class="tl-text">OSINT: Social media spike — Region Alpha</div><div class="tl-time">08:22</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--humint)"></div><div style="flex:1"><div class="tl-text">HUMINT: Field report received — Agent 7</div><div class="tl-time">08:35</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--pred)"></div><div style="flex:1"><div class="tl-text">FUSED: Corroborated node — Sector 4</div><div class="tl-time">08:41</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--osint)"></div><div style="flex:1"><div class="tl-text">OSINT: AWS S3 batch ingested — 12 records</div><div class="tl-time">08:55</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--imint)"></div><div style="flex:1"><div class="tl-text">IMINT: High-res imagery uploaded — Grid 7C</div><div class="tl-time">09:02</div></div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Ingestion Log</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:10px"><span style="color:var(--muted)">MongoDB (OSINT)</span><span style="color:var(--humint);font-family:'JetBrains Mono',monospace">● CONNECTED</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:10px"><span style="color:var(--muted)">AWS S3 (OSINT)</span><span style="color:var(--humint);font-family:'JetBrains Mono',monospace">● SYNCED</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:10px"><span style="color:var(--muted)">Manual Upload (HUMINT)</span><span style="color:var(--osint);font-family:'JetBrains Mono',monospace">● READY</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--muted)">Image Parser (IMINT)</span><span style="color:var(--humint);font-family:'JetBrains Mono',monospace">● ACTIVE</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar">
+  <div class="status-row">
+    <div class="status-item"><div class="sdot" style="background:var(--humint)"></div>MongoDB: Connected</div>
+    <div class="status-item"><div class="sdot" style="background:var(--humint)"></div>AWS S3: Synced</div>
+    <div class="status-item"><div class="sdot" style="background:var(--humint)"></div>Fusion Engine: Active</div>
+    <div class="status-item"><div class="sdot" style="background:var(--osint)"></div>Geospatial Renderer: Online</div>
+    <div class="status-item"><div class="sdot" style="background:var(--humint)"></div>IMINT Parser: Ready</div>
+  </div>
+  <div style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">PS1 · CYBERJOAR AI OC.41335.2026.59218 · Multi-Source Intelligence Fusion</div>
+</div>
+
+<!-- NODE DETAIL MODAL -->
+<div class="modal-bg" id="nodeModal" onclick="bgClose(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="modalTitle">Intelligence Node</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-img-wrap">
+        <div class="modal-img-placeholder" id="modalImg">🛰</div>
+      </div>
+      <div class="modal-grid">
+        <div class="modal-stat"><div class="modal-stat-val" id="ms-type" style="color:var(--osint)">OSINT</div><div class="modal-stat-label">SOURCE TYPE</div></div>
+        <div class="modal-stat"><div class="modal-stat-val" id="ms-conf" style="color:var(--humint)">—</div><div class="modal-stat-label">CONFIDENCE</div></div>
+        <div class="modal-stat"><div class="modal-stat-val" id="ms-lat" style="font-size:13px">—</div><div class="modal-stat-label">LATITUDE</div></div>
+        <div class="modal-stat"><div class="modal-stat-val" id="ms-lng" style="font-size:13px">—</div><div class="modal-stat-label">LONGITUDE</div></div>
+      </div>
+      <div class="modal-desc" id="ms-desc">Intelligence node details will appear here.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CLOCK ────────────────────────────────────────────────────────────────
+function tick(){document.getElementById('clockDisplay').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false})}
+tick();setInterval(tick,1000);
+
+// ─── INTELLIGENCE DATA ────────────────────────────────────────────────────
+const TYPES={
+  osint:{color:'#00d4ff',icon:'📡',label:'OSINT',bg:'rgba(0,212,255,0.15)'},
+  humint:{color:'#00e676',icon:'👤',label:'HUMINT',bg:'rgba(0,230,118,0.15)'},
+  imint:{color:'#ff6b35',icon:'🛰',label:'IMINT',bg:'rgba(255,107,53,0.15)'},
+  fused:{color:'#c084fc',icon:'◈',label:'FUSED',bg:'rgba(192,132,252,0.15)'},
+};
+
+let intelNodes=[
+  {id:'OS-001',type:'osint', lat:28.6,  lng:77.2,  title:'Social Media Surge — Delhi NCR',   conf:'87%', src:'MongoDB',  time:'08:14', desc:'High volume social media activity detected indicating mass movement. Cross-referenced with 3 OSINT feeds.'},
+  {id:'OS-002',type:'osint', lat:19.07, lng:72.87, title:'Port Activity — Mumbai Harbor',     conf:'91%', src:'AWS S3',   time:'08:22', desc:'Satellite-corroborated increase in maritime traffic. 14 vessels logged via AIS transponder data.'},
+  {id:'OS-003',type:'osint', lat:13.08, lng:80.27, title:'Comm Intercept — Chennai Node',     conf:'76%', src:'MongoDB',  time:'09:10', desc:'Open source radio frequency scan detected anomalous broadcast pattern consistent with covert comms.'},
+  {id:'OS-004',type:'osint', lat:22.57, lng:88.36, title:'Financial Signal — Kolkata',        conf:'83%', src:'AWS S3',   time:'09:30', desc:'Unusual financial transaction pattern flagged across 3 regional banks. OSINT aggregator confidence: high.'},
+  {id:'HU-001',type:'humint',lat:26.85, lng:80.9,  title:'Field Report — Agent Kilo',         conf:'94%', src:'CSV Upload',time:'08:35', desc:'Human intelligence asset confirms movement of 40+ personnel in northern sector. Timestamp verified.'},
+  {id:'HU-002',type:'humint',lat:17.38, lng:78.48, title:'Contact Report — Hyderabad',        conf:'88%', src:'JSON Feed', time:'08:55', desc:'Local asset reports unusual vehicle convoy activity on NH44 bypass. Three independent confirmations received.'},
+  {id:'HU-003',type:'humint',lat:23.02, lng:72.57, title:'Safe House Identified — Ahmedabad', conf:'79%', src:'CSV Upload',time:'09:15', desc:'Human source confirms location of temporary operational base. Physical surveillance recommended.'},
+  {id:'IM-001',type:'imint', lat:28.45, lng:77.02, title:'Imagery — Gurgaon Industrial Zone', conf:'96%', src:'JPG Upload',time:'08:14', desc:'High-resolution satellite pass reveals new construction activity in previously dormant industrial zone. Change detected vs T-30 imagery.'},
+  {id:'IM-002',type:'imint', lat:12.97, lng:77.59, title:'Thermal Scan — Bengaluru',          conf:'89%', src:'JPEG Feed', time:'08:41', desc:'Thermal imagery detects heat signature anomaly consistent with generator activity in a residential zone.'},
+  {id:'IM-003',type:'imint', lat:21.14, lng:79.08, title:'Aerial Survey — Nagpur',            conf:'82%', src:'JPG Upload',time:'09:02', desc:'Aerial reconnaissance imagery shows vehicle concentration at logistics hub. Corroborated by OSINT-004.'},
+  {id:'FU-001',type:'fused', lat:28.52, lng:77.1,  title:'FUSED NODE — High Confidence',      conf:'97%', src:'Fusion Engine',time:'09:40',desc:'Triple-corroborated intelligence node. OSINT social media data, HUMINT field report, and IMINT satellite pass all confirm activity in this sector.'},
+  {id:'FU-002',type:'fused', lat:19.1,  lng:72.9,  title:'FUSED NODE — Mumbai Maritime',      conf:'93%', src:'Fusion Engine',time:'09:50',desc:'OSINT port data corroborated by HUMINT asset report. Fusion engine confidence: very high. Recommend immediate action.'},
+];
+
+let currentFilter='all';
+let markers=[];
+let map;
+
+// ─── MAP INIT ─────────────────────────────────────────────────────────────
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:false}).setView([22,78],5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:18,attribution:''
+  }).addTo(map);
+  renderMarkers();
+}
+
+function makeIcon(type){
+  const t=TYPES[type];
+  return L.divIcon({
+    className:'',
+    html:`<div style="
+      width:24px;height:24px;border-radius:50%;
+      background:${t.bg};
+      border:2px solid ${t.color};
+      display:flex;align-items:center;justify-content:center;
+      font-size:10px;cursor:pointer;
+      box-shadow:0 0 8px ${t.color}55;
+      transition:transform .2s;
+    ">${t.icon}</div>`,
+    iconSize:[24,24],iconAnchor:[12,12]
+  });
+}
+
+function renderMarkers(){
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+  intelNodes.forEach(node=>{
+    if(currentFilter!=='all'&&node.type!==currentFilter)return;
+    const m=L.marker([node.lat,node.lng],{icon:makeIcon(node.type)}).addTo(map);
+    m.on('mouseover',function(e){showPopup(node,e.originalEvent)});
+    m.on('mouseout',function(){hidePopup()});
+    m.on('click',function(){openModal(node)});
+    markers.push(m);
+  });
+  document.getElementById('nodeCountBadge').textContent=markers.length;
+}
+
+// ─── HOVER POPUP ──────────────────────────────────────────────────────────
+function showPopup(node,e){
+  const popup=document.getElementById('intelPopup');
+  const t=TYPES[node.type];
+  popup.style.display='block';
+  document.getElementById('popupType').textContent=t.label;
+  document.getElementById('popupType').style.background=t.bg;
+  document.getElementById('popupType').style.color=t.color;
+  document.getElementById('popupTitle').textContent=node.title;
+  document.getElementById('popupCoords').textContent=node.lat.toFixed(2)+'°N, '+node.lng.toFixed(2)+'°E';
+  document.getElementById('popupConf').textContent=node.conf;
+  document.getElementById('popupTime').textContent=node.time;
+  document.getElementById('popupSrc').textContent=node.src;
+  document.getElementById('popupImg').textContent=t.icon;
+  const mapEl=document.getElementById('map');
+  const rect=mapEl.getBoundingClientRect();
+  let left=e.clientX-rect.left+15;
+  let top=e.clientY-rect.top-60;
+  if(left+230>mapEl.clientWidth)left=e.clientX-rect.left-235;
+  if(top<0)top=10;
+  popup.style.left=left+'px';
+  popup.style.top=top+'px';
+  popup.style.borderColor=t.color;
+}
+
+function hidePopup(){document.getElementById('intelPopup').style.display='none';}
+
+// ─── FILTER ───────────────────────────────────────────────────────────────
+function filterMap(type,btn){
+  currentFilter=type;
+  document.querySelectorAll('.map-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderMarkers();
+  renderIntelList();
+}
+
+// ─── INTEL LIST ───────────────────────────────────────────────────────────
+function renderIntelList(){
+  const list=document.getElementById('intelList');
+  const filtered=currentFilter==='all'?intelNodes:intelNodes.filter(n=>n.type===currentFilter);
+  list.innerHTML=filtered.slice(0,8).map(n=>{
+    const t=TYPES[n.type];
+    return `<div class="intel-item" onclick="openModal(${JSON.stringify(n).replace(/"/g,'&quot;')})">
+      <div class="intel-top">
+        <span class="intel-id">${n.id}</span>
+        <span class="intel-type" style="background:${t.bg};color:${t.color}">${t.label}</span>
+      </div>
+      <div class="intel-title">${n.title}</div>
+      <div class="intel-meta">${n.src} · Conf: ${n.conf} · ${n.time}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── MODAL ────────────────────────────────────────────────────────────────
+function openModal(node){
+  if(typeof node==='string')node=JSON.parse(node);
+  const t=TYPES[node.type];
+  document.getElementById('nodeModal').classList.add('open');
+  document.getElementById('modalTitle').textContent=node.id+' — '+node.title;
+  document.getElementById('modalImg').textContent=t.icon;
+  document.getElementById('ms-type').textContent=t.label;
+  document.getElementById('ms-type').style.color=t.color;
+  document.getElementById('ms-conf').textContent=node.conf;
+  document.getElementById('ms-lat').textContent=node.lat.toFixed(4)+'°N';
+  document.getElementById('ms-lng').textContent=node.lng.toFixed(4)+'°E';
+  document.getElementById('ms-desc').textContent=node.desc;
+}
+
+function closeModal(){document.getElementById('nodeModal').classList.remove('open');}
+function bgClose(e){if(e.target.id==='nodeModal')closeModal();}
+
+// ─── FILE UPLOAD ──────────────────────────────────────────────────────────
+const dropZone=document.getElementById('dropZone');
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over')});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');handleFiles(e.dataTransfer.files)});
+dropZone.addEventListener('click',()=>document.getElementById('fileInput').click());
+
+function handleFiles(files){
+  Array.from(files).forEach(file=>{
+    const ext=file.name.split('.').pop().toLowerCase();
+    let type='osint';
+    if(['jpg','jpeg','png'].includes(ext))type='imint';
+    else if(['csv','json'].includes(ext))type='humint';
+    const newNode={
+      id:(type==='imint'?'IM':type==='humint'?'HU':'OS')+'-'+(100+Math.floor(Math.random()*900)),
+      type,
+      lat:8+Math.random()*28,
+      lng:68+Math.random()*25,
+      title:file.name.replace(/\.[^.]+$/,'')+(type==='imint'?' — Imagery':(type==='humint'?' — Field Report':' — OSINT Data')),
+      conf:Math.floor(70+Math.random()*25)+'%',
+      src:file.name,
+      time:new Date().toLocaleTimeString('en-IN',{hour12:false,hour:'2-digit',minute:'2-digit'}),
+      desc:`Uploaded file: ${file.name}. File size: ${(file.size/1024).toFixed(1)} KB. Automatically classified as ${type.toUpperCase()} based on file type. Geospatial coordinates assigned by ingestion engine.`
+    };
+    intelNodes.unshift(newNode);
+    updateCounts();
+    renderMarkers();
+    renderIntelList();
+    addTimelineEvent(newNode);
+    showToast(`${type.toUpperCase()} node ingested: ${file.name}`);
+  });
+}
+
+function loadSource(type){
+  const t=TYPES[type];
+  showToast(`Refreshing ${t.label} source...`);
+  setTimeout(()=>{
+    const newNode={
+      id:(type==='imint'?'IM':type==='humint'?'HU':'OS')+'-'+(200+Math.floor(Math.random()*700)),
+      type,lat:8+Math.random()*28,lng:68+Math.random()*25,
+      title:['New Signal Detected','Activity Surge','Asset Update','Report Received','Fresh Data'][Math.floor(Math.random()*5)]+' — '+['Zone A','Sector B','Region C','Grid D'][Math.floor(Math.random()*4)],
+      conf:Math.floor(70+Math.random()*25)+'%',
+      src:type==='osint'?'MongoDB/S3':type==='humint'?'CSV Upload':'JPEG Feed',
+      time:new Date().toLocaleTimeString('en-IN',{hour12:false,hour:'2-digit',minute:'2-digit'}),
+      desc:`Auto-ingested from ${type.toUpperCase()} source. Node validated against existing intelligence. Confidence score computed via fusion algorithm.`
+    };
+    intelNodes.unshift(newNode);
+    updateCounts();renderMarkers();renderIntelList();addTimelineEvent(newNode);
+    showToast(`${t.label} source refreshed — 1 new node`);
+  },1200);
+}
+
+function addRandomNode(){
+  const types=['osint','humint','imint','fused'];
+  const type=types[Math.floor(Math.random()*types.length)];
+  const t=TYPES[type];
+  const newNode={
+    id:t.label.substring(0,2)+'-INJ-'+Math.floor(Math.random()*999),
+    type,lat:8+Math.random()*28,lng:68+Math.random()*25,
+    title:['Anomaly Detected','Movement Confirmed','Signal Acquired','Asset Located'][Math.floor(Math.random()*4)],
+    conf:Math.floor(65+Math.random()*30)+'%',
+    src:'Manual Injection',
+    time:new Date().toLocaleTimeString('en-IN',{hour12:false,hour:'2-digit',minute:'2-digit'}),
+    desc:'Manually injected intelligence node for demonstration purposes. Real system would validate via fusion engine before plotting.'
+  };
+  intelNodes.unshift(newNode);
+  updateCounts();renderMarkers();renderIntelList();addTimelineEvent(newNode);
+  map.panTo([newNode.lat,newNode.lng]);
+}
+
+function updateCounts(){
+  const os=intelNodes.filter(n=>n.type==='osint').length;
+  const hu=intelNodes.filter(n=>n.type==='humint').length;
+  const im=intelNodes.filter(n=>n.type==='imint').length;
+  document.getElementById('countOSINT').textContent=os;
+  document.getElementById('countHUMINT').textContent=hu;
+  document.getElementById('countIMINT').textContent=im;
+  document.getElementById('countTotal').textContent=intelNodes.length;
+  document.getElementById('s-osint').textContent=os;
+  document.getElementById('s-humint').textContent=hu;
+  document.getElementById('s-imint').textContent=im;
+  updateChart(os,hu,im);
+}
+
+function addTimelineEvent(node){
+  const t=TYPES[node.type];
+  const tl=document.getElementById('timeline');
+  const div=document.createElement('div');div.className='tl-item';
+  div.innerHTML=`<div class="tl-dot" style="background:${t.color}"></div><div style="flex:1"><div class="tl-text">${t.label}: ${node.title}</div><div class="tl-time">${node.time}</div></div>`;
+  tl.prepend(div);
+}
+
+// ─── CHART ────────────────────────────────────────────────────────────────
+let distChart;
+function initChart(){
+  distChart=new Chart(document.getElementById('distChart'),{
+    type:'doughnut',
+    data:{
+      labels:['OSINT','HUMINT','IMINT','FUSED'],
+      datasets:[{data:[12,8,6,2],backgroundColor:['rgba(0,212,255,0.7)','rgba(0,230,118,0.7)','rgba(255,107,53,0.7)','rgba(192,132,252,0.7)'],borderColor:['#00d4ff','#00e676','#ff6b35','#c084fc'],borderWidth:2}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'65%',
+      plugins:{legend:{position:'bottom',labels:{color:'#4a5a6a',font:{size:9},boxWidth:10,padding:8}}}
+    }
+  });
+}
+
+function updateChart(os,hu,im){
+  if(!distChart)return;
+  const fu=intelNodes.filter(n=>n.type==='fused').length;
+  distChart.data.datasets[0].data=[os,hu,im,fu];
+  distChart.update();
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────
+function showToast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:50px;left:50%;transform:translateX(-50%);background:rgba(0,212,255,0.15);border:1px solid var(--osint);color:var(--osint);font-family:JetBrains Mono,monospace;font-size:10px;padding:6px 14px;border-radius:20px;z-index:9999;transition:opacity .3s';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._timer);t._timer=setTimeout(()=>t.style.opacity='0',2500);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  initMap();
+  initChart();
+  renderIntelList();
+});
+</script>
+</body>
+</html>
